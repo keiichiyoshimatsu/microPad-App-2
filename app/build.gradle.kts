@@ -41,6 +41,19 @@ android {
         compose = true
         viewBinding = true
     }
+
+    packaging {
+        jniLibs {
+            // Required for 16KB page size support on Android 15+ 
+            // when using non-aligned native libraries like OpenCV
+            useLegacyPackaging = true
+        }
+    }
+
+    testOptions {
+        // Speeds up instrumented tests by disabling animations automatically
+        animationsDisabled = true
+    }
 }
 
 dependencies {
@@ -95,6 +108,7 @@ dependencies {
     testImplementation(libs.mockito.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.uiautomator)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)

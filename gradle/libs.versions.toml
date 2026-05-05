@@ -22,11 +22,13 @@ navigationCompose = "2.9.7"
 mockito = "5.11.0"
 materialIconsExtended = "1.7.8"
 foundationLayout = "1.10.6"
+uiautomator = "2.3.0"
 workRuntimeKtx = "2.11.2"
 googleServices = "4.4.4"
 exifinterface = "1.3.6"
 
 [libraries]
+androidx-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "uiautomator" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 androidx-activity = { module = "androidx.activity:activity", version.ref = "activityKtx" }

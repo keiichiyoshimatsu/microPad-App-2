@@ -11,6 +11,7 @@ An Android application for the automated analysis of microfluidic Paper-based An
 - **ROI Management**: Manually adjust detected regions of interest or label them for specific chemical indicators.
 - **Cloud Synchronization**: Integrated with Google Drive for secure backup and cross-device access to datasets and analysis history.
 - **Navigation Simulator**: A built-in demonstration mode that walks users through the core application flow.
+- **Error Reporting**: Integrated with Firebase Crashlytics for real-time crash and error   reporting. Users are asked for consent on first launch. No personal data or images are ever included in reports.
 
 ## Getting Started
 
@@ -53,3 +54,4 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 - Developed for the analysis of microfluidic Paper-based Analytical Devices.
 - Built using the OpenCV open-source library.
+- Error reporting powered by Firebase Crashlytics.

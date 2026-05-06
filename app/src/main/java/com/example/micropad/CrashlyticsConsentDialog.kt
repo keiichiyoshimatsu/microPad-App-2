@@ -4,13 +4,8 @@ import android.content.Context
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.edit
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 @Composable
@@ -35,20 +30,24 @@ fun CrashlyticsConsentDialog() {
         },
         confirmButton = {
             TextButton(onClick = {
-                prefs.edit {
-                    putBoolean("crashlytics_consent", true)
-                        .putBoolean("crashlytics_enabled", true)
-                }
-                FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = true
+                prefs.edit()
+                    .putBoolean("crashlytics_consent", true)
+                    .putBoolean("crashlytics_enabled", true)
+                    .apply()
+                FirebaseCrashlytics.getInstance()
+                    .setCrashlyticsCollectionEnabled(true)
+                showDialog = false
             }) { Text("Yes, send reports") }
         },
         dismissButton = {
             TextButton(onClick = {
-                prefs.edit {
-                    putBoolean("crashlytics_consent", true)
-                        .putBoolean("crashlytics_enabled", false)
-                }
-                FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = false
+                prefs.edit()
+                    .putBoolean("crashlytics_consent", true)
+                    .putBoolean("crashlytics_enabled", false)
+                    .apply()
+                FirebaseCrashlytics.getInstance()
+                    .setCrashlyticsCollectionEnabled(false)
+                showDialog = false
             }) { Text("No thanks") }
         }
     )

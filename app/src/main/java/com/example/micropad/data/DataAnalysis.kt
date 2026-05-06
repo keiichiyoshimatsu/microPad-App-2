@@ -28,9 +28,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.navigation.NavController
-import com.example.micropad.ui.runNavigationSimulation
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.opencv.core.Mat
 import org.opencv.core.MatOfPoint
@@ -39,6 +36,15 @@ import org.opencv.core.Scalar
 import java.util.Collections
 import kotlin.math.abs
 import kotlin.math.sqrt
+import com.example.micropad.data.extractManualDotAtPoint
+import com.example.micropad.data.ingestImages
+import kotlin.collections.get
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.navigation.NavController
+import com.example.micropad.ui.runNavigationSimulation
+import kotlinx.coroutines.Dispatchers
 
 /**
  * Data class to hold image and its semantic label.
@@ -253,6 +259,11 @@ class Sample(
  * @property samples The list of samples in this dataset.
  */
 class SampleDataset(val samples: MutableList<Sample>) {
+    /**
+     * Tracks which samples are currently selected.
+     */
+    var selected = mutableListOf<Boolean>().apply {repeat(samples.size) { add(true) } }
+
     fun isEmpty() = samples.isEmpty()
 
     /**
@@ -366,6 +377,20 @@ class SampleDataset(val samples: MutableList<Sample>) {
             samples.clear()
         }
     }
+
+    /**
+     * Performs classification on a target dataset using a reference dataset.
+     * This method is deprecated in favor of whole-card classification.
+     */
+    fun classify(
+        referenceData: SampleDataset,
+        newData: SampleDataset,
+        distance: String = "Euclidean",
+        mode: String = "RGB",
+        normalizationStrategy: String = "None"
+    ) {
+        // No longer actively used in the main flow, which prefers runWholeCardClassification.
+    }
 }
 
 /**
@@ -373,7 +398,6 @@ class SampleDataset(val samples: MutableList<Sample>) {
  */
 class DatasetModel : ViewModel() {
 
-    // Part of unused simulation
     var simulationRunning by mutableStateOf(false)
     var labelingTargetIsReference by mutableStateOf(true)
 
@@ -556,9 +580,6 @@ class DatasetModel : ViewModel() {
             .toDoubleArray()
     }
 
-    /**
-     * Compare entire sample to each reference.
-     */
     fun runWholeCardClassification() {
         val ref = referenceDataset ?: return
         val new = newDataset ?: return
@@ -656,9 +677,6 @@ class DatasetModel : ViewModel() {
         }
     }
 
-    /**
-     * Compare colors between samples and references.
-     */
     fun runPerColorClassification() {
         val ref = referenceDataset ?: return
         val new = newDataset ?: return
@@ -736,9 +754,6 @@ class DatasetModel : ViewModel() {
         }
     }
 
-    /**
-     * Classify ROIs between references and samples.
-     */
     fun runClassification() {
         val ref = referenceDataset
         val new = newDataset
@@ -750,9 +765,6 @@ class DatasetModel : ViewModel() {
         }
     }
 
-    /**
-     * Captures ROI names for simulation to repopulate after.
-     */
     fun syncNames() {
         savedNames.clear()
         val combined = mutableListOf<Sample>()
@@ -763,9 +775,6 @@ class DatasetModel : ViewModel() {
         }
     }
 
-    /**
-     * Resets user session and starts over.
-     */
     fun reset() {
         pendingReferences.clear()
         pendingSamples.clear()
@@ -783,9 +792,6 @@ class DatasetModel : ViewModel() {
         lastIngestedSelectionStrategy = ""
     }
 
-    /**
-     * A user action history.
-     */
     fun saveToHistory() {
         val dataset = newDataset ?: return
         val summary = dataset.samples.joinToString("; ") { sample ->
@@ -807,11 +813,6 @@ class DatasetModel : ViewModel() {
         analysisHistory.remove(entry)
     }
 
-    /**
-     * Uses current functionality to simulate usage for user demonstration.
-     *
-     * Currently not in use because it is "heavy."
-     */
     fun startSimulation(navController: NavController) {
         if (isSimulating) return  // 🔥 prevents double start
 

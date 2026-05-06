@@ -26,19 +26,17 @@ import com.example.micropad.data.DatasetModel
 import com.example.micropad.data.Sample
 import com.example.micropad.data.SampleDataset
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withContext
 import org.opencv.core.MatOfPoint
 import org.opencv.core.Scalar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * UI Component that displays a narration overlay during the navigation simulation.
  * It utilizes a semi-transparent black background with white text at the bottom.
- *
- * Currently not used.
  *
  * @param viewModel The shared [DatasetModel] containing simulation state.
  */

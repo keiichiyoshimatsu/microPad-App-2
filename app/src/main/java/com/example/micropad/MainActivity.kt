@@ -37,12 +37,41 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
@@ -53,7 +82,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -63,8 +91,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,22 +100,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.micropad.data.CsvImportButton
 import com.example.micropad.data.AppErrorLogger
 import com.example.micropad.data.DatasetModel
-import com.example.micropad.data.ErrorHandler
 import com.example.micropad.data.cloud.CloudSyncManager
+import com.example.micropad.data.ErrorHandler
 import com.example.micropad.ui.AnalysisConfigScreen
 import com.example.micropad.ui.AnalysisScreen
 import com.example.micropad.ui.CloudSyncScreen
 import com.example.micropad.ui.GalleryReferenceFlow
-import com.example.micropad.ui.HistoryScreen
 import com.example.micropad.ui.LabelingScreen
 import com.example.micropad.ui.WellNamingScreen
+import com.example.micropad.ui.camera.CameraScreen
+import com.example.micropad.ui.AnalysisScreen
+import com.example.micropad.ui.GalleryReferenceFlow
+import com.example.micropad.ui.HistoryScreen
+import com.example.micropad.ui.LabelingScreen
+import com.example.micropad.ui.SimulationOverlay
 import com.example.micropad.ui.camera.CameraScreen
 import com.example.micropad.ui.runNavigationSimulation
 import com.example.micropad.ui.theme.MicroPadTheme
@@ -102,10 +135,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         ErrorHandler.safeExecute(this) {
-            if (!OpenCVLoader.initLocal()) {
-                Log.e("OpenCV", "Unable to load OpenCV!")
+            if (!OpenCVLoader.initDebug()) {
+                android.util.Log.e("OpenCV", "Unable to load OpenCV!")
             } else {
-                Log.d("OpenCV", "OpenCV loaded successfully.")
+                android.util.Log.d("OpenCV", "OpenCV loaded successfully.")
             }
         }
         CloudSyncManager.ensureScheduledWorkMatchesPreference(this)
@@ -151,8 +184,6 @@ fun MainContent(viewModel: DatasetModel, navController: NavHostController) {
     val currentRoute = navBackStackEntry?.destination?.route
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-
-    // Part of unused simulation, can be re-enabled, but have to do it all over
     val isUiBlocked = viewModel.isSimulating && currentRoute != "home"
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -286,7 +317,7 @@ fun ReferenceOnlyDialog(navigate: () -> Unit, onDismissRequest: () -> Unit) {
         if (!showDialog) return
 
         AlertDialog(
-            onDismissRequest = { },
+            onDismissRequest = { showDialog = false },
             title = { Text("Share system errors to improve the app?") },
             text = {
                 Text(
@@ -303,6 +334,7 @@ fun ReferenceOnlyDialog(navigate: () -> Unit, onDismissRequest: () -> Unit) {
                         }
                         AppErrorLogger.clearLog(context)
                     }
+                    showDialog = false
                 }) { Text("Share once") }
             },
             dismissButton = {
@@ -310,12 +342,14 @@ fun ReferenceOnlyDialog(navigate: () -> Unit, onDismissRequest: () -> Unit) {
                     ErrorHandler.safeUnit(context, tag = "ErrorShare") {
                         AppErrorLogger.clearLog(context)
                     }
+                    showDialog = false
                 }) { Text("Dismiss") }
                 Row {
                     TextButton(onClick = {
                         CloudSyncManager.setWeeklyErrorUploadEnabled(context, true)
+                        showDialog = false
                     }) { Text("Enable weekly upload") }
-                    TextButton(onClick = { }) { Text("Later") }
+                    TextButton(onClick = { showDialog = false }) { Text("Later") }
                 }
             }
         )

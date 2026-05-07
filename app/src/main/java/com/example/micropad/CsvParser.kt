@@ -9,6 +9,8 @@ import com.example.micropad.data.ErrorHandler
 /**
  * A utility class for parsing and validating CSV files.
  *
+ * @property expectedHeaders A list of expected headers in the CSV file.
+ * @receiver The Composable calling this function.
  * @return Unit
  */
 object CsvParser {

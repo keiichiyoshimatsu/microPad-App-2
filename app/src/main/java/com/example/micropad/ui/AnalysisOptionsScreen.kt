@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -30,7 +31,7 @@ import com.example.micropad.data.DatasetModel
  */
 @Composable
 fun AnalysisConfigScreen(viewModel: DatasetModel, navController: NavController) {
-    LocalContext.current
+    val context = LocalContext.current
 
     val distanceOptions = listOf("Euclidean", "Manhattan")
     val colorModeOptions = listOf("RGB", "Grayscale")

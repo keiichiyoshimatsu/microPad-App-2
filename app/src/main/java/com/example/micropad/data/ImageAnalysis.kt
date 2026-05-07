@@ -20,11 +20,11 @@ package com.example.micropad.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Environment
 import android.util.Log
 import androidx.core.graphics.createBitmap
-import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -47,7 +47,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.hypot
+import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -201,10 +201,12 @@ fun findAndWarpCard(image: Mat, context: Context, log: Boolean): Mat? {
  *
  * @param image: Matrix of image columns and rows (colors).
  * @param contours: List of contours found in the image.
+ * @param context: Context of the Composable calling this function.
+ * @param log: Boolean indicating whether the function should save snapshots of each.
  * @return MutableList<Pair<Mat, Point>> A pair consisting of the rectangle portion of the image and
  * its bounding box
  */
-fun findCalibrationSquares(image: Mat, contours: ArrayList<MatOfPoint>): MutableList<Pair<Mat, Point>> {
+fun findCalibrationSquares(image: Mat, contours: ArrayList<MatOfPoint>, context: Context, log: Boolean): MutableList<Pair<Mat, Point>> {
     Log.d("Pipeline", "--- Stage: Calibration Square Isolation ---")
     data class Candidate(val region: Mat, val center: Point, val area: Double)
     val candidates = mutableListOf<Candidate>()
@@ -222,7 +224,7 @@ fun findCalibrationSquares(image: Mat, contours: ArrayList<MatOfPoint>): Mutable
 
         val rect = Imgproc.boundingRect(contour)
         val ratio = rect.width.toDouble() / rect.height.toDouble()
-        if (ratio !in 0.7..1.3) continue
+        if (ratio < 0.7 || ratio > 1.3) continue
 
         val m = Imgproc.moments(contour)
         if (m.m00 == 0.0) continue
@@ -333,6 +335,70 @@ fun extractCalibrationColors(shapes: MutableList<Pair<Mat, Point>>): MutableList
     return colors
 }
 
+/**
+ * Find a linear fit that tries to push image brightness towards calibration standard.
+ * Cannot always find a perfect match because this function does not know the expected RGB
+ * values.
+ *
+ * @param measured: List of measured values.
+ * @param expected: List of expected values.
+ * @return Pair<Double, Double>: (scale, offset)
+ */
+fun computeLinearFit(measured: DoubleArray, expected: DoubleArray): Pair<Double, Double> {
+    val n = measured.size
+    if (n == 0) return Pair(1.0, 0.0)
+    val sumX = measured.sum()
+    val sumY = expected.sum()
+    val sumXY = measured.zip(expected).sumOf { it.first * it.second }
+    val sumX2 = measured.sumOf { it * it }
+    val denom = n * sumX2 - sumX * sumX
+    // Guard: avoid division by zero when all measured values are identical
+    if (denom == 0.0) return Pair(1.0, 0.0)
+    val scale = (n * sumXY - sumX * sumY) / denom
+    val offset = (sumY - scale * sumX) / n
+    return Pair(scale, offset)
+}
+
+
+/**
+ * Rebalances the image given a set of the found color points and the intended reference color
+ * points.
+ *
+ * @param image: Matrix of image columns and rows (colors).
+ * @param found: List of found color points.
+ * @param reference: List of intended reference color points.
+ * @return Mat rebalanced image.
+ */
+fun rebalanceImage(image: Mat, found: List<Scalar>, reference: List<Scalar>): Mat {
+    if (found.isEmpty() || reference.isEmpty() || found.size != reference.size) return image
+    return try {
+        Log.d("Pipeline", "--- Stage: Color Calibration ---")
+        val balanced = image.clone()
+        // OpenCV BGR: val[0]=Blue, val[1]=Green, val[2]=Red
+        val bMeasured = found.map { it.`val`[0] }.toDoubleArray()
+        val gMeasured = found.map { it.`val`[1] }.toDoubleArray()
+        val rMeasured = found.map { it.`val`[2] }.toDoubleArray()
+        val bExpected  = reference.map { it.`val`[0] }.toDoubleArray()
+        val gExpected  = reference.map { it.`val`[1] }.toDoubleArray()
+        val rExpected  = reference.map { it.`val`[2] }.toDoubleArray()
+        val (bScale, bOffset) = computeLinearFit(bMeasured, bExpected)
+        val (gScale, gOffset) = computeLinearFit(gMeasured, gExpected)
+        val (rScale, rOffset) = computeLinearFit(rMeasured, rExpected)
+        val channels = ArrayList<Mat>()
+        Core.split(balanced, channels)
+        if (channels.size >= 3) {
+            channels[0].convertTo(channels[0], -1, bScale, bOffset)
+            channels[1].convertTo(channels[1], -1, gScale, gOffset)
+            channels[2].convertTo(channels[2], -1, rScale, rOffset)
+            Core.merge(channels, balanced)
+        }
+        channels.forEach { it.release() }
+        balanced
+    } catch (e: Exception) {
+        android.util.Log.e("ImagePipeline", "rebalanceImage failed: ${e.message}", e)
+        image
+    }
+}
 
 /**
  * Get the center of a contour.
@@ -373,12 +439,14 @@ fun shrinkContour(contour: MatOfPoint, shrink: Float): MatOfPoint {
  *
  * @param image: Matrix of image columns and rows (colors).
  * @param orderedDots: List of ordered dots.
+ * @param highlightIndex: Index of dot to highlight.
  * @param selectionStates: List of selection states.
  * @return Bitmap: Image with ordering drawn.
  */
 fun drawOrdering(
     image: Mat,
     orderedDots: List<Pair<MatOfPoint, Scalar>>,
+    highlightIndex: Int? = null,
     selectionStates: List<Boolean>? = null
 ): Bitmap {
     return try {
@@ -444,7 +512,7 @@ fun assignGridIndices(
         val centers = dots.map { Pair(it, getCenter(it.first)) }
         val distances = centers.map { (_, p) ->
             centers.filter { (_, q) -> q != p }
-                .minOfOrNull { (_, q) -> hypot(q.x - p.x, q.y - p.y) } ?: 0.0
+                .minOfOrNull { (_, q) -> Math.hypot(q.x - p.x, q.y - p.y) } ?: 0.0
         }
         val spacing = distances.average()
         if (spacing <= 0.0) return dots.mapIndexed { i, d -> Pair(d, Pair(0, i)) }
@@ -630,8 +698,8 @@ fun createCircularContour(center: Point, radius: Double, numPoints: Int = 36): M
     val points = (0 until numPoints).map { i ->
         val theta = 2.0 * PI * i / numPoints
         Point(
-            center.x + radius * cos(theta),
-            center.y + radius * sin(theta)
+            center.x + radius * kotlin.math.cos(theta),
+            center.y + radius * kotlin.math.sin(theta)
         )
     }
     return MatOfPoint(*points.toTypedArray())
@@ -666,6 +734,12 @@ fun extractManualDotAtPoint(
     return Pair(sampleContour, dataPoint)
 }
 
+// Colors used on dye sheet, arranged in BGR ordering
+val expectedColors = mutableListOf(
+    Scalar(0.0, 0.0, 0.0), Scalar(255.0, 255.0, 0.0),
+    Scalar(0.0, 255.0, 255.0), Scalar(255.0, 0.0, 255.0)
+)
+
 
 /**
  * Preprocess an image.
@@ -673,6 +747,7 @@ fun extractManualDotAtPoint(
  * @param image: Matrix of image columns and rows (colors).
  * @param context: Context of the Composable calling this function.
  * @param log: Boolean indicating whether the function should save snapshots of each.
+ * @param normalizationStrategy: Strategy to use for color normalization.
  * @param selectionStrategy: Strategy to use for color extraction.
  * @return Sample: Preprocessed image.
  */
@@ -680,6 +755,7 @@ fun preprocessImage(
     image: Mat,
     context: Context,
     log: Boolean,
+    normalizationStrategy: String,
     selectionStrategy: String
 ): Sample? { // <-- return nullable now
     return try {
@@ -688,7 +764,7 @@ fun preprocessImage(
             return null
         }
         val contours = findContours(image, context, log)
-        val shapes   = findCalibrationSquares(image, contours)
+        val shapes   = findCalibrationSquares(image, contours, context, log)
         val colors   = extractCalibrationColors(shapes)
         val dots     = findDots(image, contours, context, log, selectionStrategy)
 
@@ -696,6 +772,10 @@ fun preprocessImage(
             AppErrorLogger.logError(context, "ImagePipeline", "No wells detected — skipping sample")
             return null
         }
+        var balanced = image
+//        if (normalizationStrategy == "Regression" && colors.size == 4) {
+//            balanced = rebalanceImage(image, colors, expectedColors)
+//        }
 
         val orderingImage = drawOrdering(image, dots)
         Sample(image, image, orderingImage, dots, squares = colors)
@@ -732,7 +812,8 @@ suspend fun ingestImages(
     addresses: List<Uri>,
     context: Context,
     log: Boolean = false,
-    normalizationStrategy: String = "Regression"
+    normalizationStrategy: String = "Regression",
+    selectionStrategy: String = "Mean"
 ): SampleDataset = coroutineScope {
     Log.d("Pipeline", "Ingesting ${addresses.size} image(s)")
 
@@ -788,7 +869,7 @@ suspend fun ingestImages(
                 mat.release()
 
                 val cropped = findAndWarpCard(image, context, log) ?: image
-                preprocessImage(cropped, context, log, normalizationStrategy)
+                preprocessImage(cropped, context, log, normalizationStrategy, selectionStrategy)
 
             } catch (e: CancellationException) {
                 throw e   // propagate coroutine cancellation — never swallow

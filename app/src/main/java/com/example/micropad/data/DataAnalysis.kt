@@ -146,6 +146,7 @@ class Sample(
      *
      * @param strategy The user-selected normalization: MinMax, Z-Score, or none.
      * @param mode Normalize in RGB or grayscale.
+     * @param selection if colored squares should be included in the calculation.
      * @return List of DoubleArray, where each DoubleArray is the feature vector for a dot.
      */
     fun getNormalizedData(strategy: String, mode: String, selection: String): List<DoubleArray> {
